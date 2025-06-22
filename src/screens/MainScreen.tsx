@@ -1,4 +1,4 @@
-import React, {useEffect, useMemo, useCallback} from 'react';
+import React, { useEffect, useMemo, useCallback, useState } from 'react';
 import {
   View,
   Text,
@@ -6,11 +6,10 @@ import {
   FlatList,
   TouchableOpacity,
   ActivityIndicator,
-  Alert,
   ListRenderItem,
 } from 'react-native';
-import {useSelector, useDispatch} from 'react-redux';
-import {StackNavigationProp} from '@react-navigation/stack';
+import { useSelector, useDispatch } from 'react-redux';
+import { StackNavigationProp } from '@react-navigation/stack';
 import {
   fetchTodosAsync,
   toggleTodo,
@@ -22,12 +21,8 @@ import {
 import TodoItem from '../components/TodoItem';
 import FilterButtons from '../components/FilterButtons';
 import SortButtons from '../components/SortButtons';
-import {
-  Todo,
-  RootStackParamList,
-  FilterType,
-  SortType,
-} from '../types';
+import CustomModal from '../components/CustomModal';
+import { Todo, RootStackParamList, FilterType, SortType } from '../types';
 import { AppDispatch, RootState } from '../store/store';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -40,11 +35,23 @@ interface Props {
   navigation: MainScreenNavigationProp;
 }
 
-const MainScreen: React.FC<Props> = ({navigation}) => {
+interface ModalState {
+  visible: boolean;
+  title: string;
+  message: string;
+}
+
+const MainScreen = ({ navigation }: Props) => {
   const dispatch = useDispatch<AppDispatch>();
-  const {items, loading, error, filter, sortBy} = useSelector(
+  const { items, loading, error, filter, sortBy } = useSelector(
     (state: RootState) => state.todos,
   );
+
+  const [modal, setModal] = useState<ModalState>({
+    visible: false,
+    title: '',
+    message: '',
+  });
 
   // Fetch todos on component mount
   useEffect(() => {
@@ -59,6 +66,20 @@ const MainScreen: React.FC<Props> = ({navigation}) => {
       }
     };
   }, [dispatch, error]);
+
+  // Show modal helper
+  const showModal = useCallback((title: string, message: string) => {
+    setModal({
+      visible: true,
+      title,
+      message,
+    });
+  }, []);
+
+  // Hide modal helper
+  const hideModal = useCallback(() => {
+    setModal(prev => ({ ...prev, visible: false }));
+  }, []);
 
   // Memoized filtered and sorted todos for performance
   const filteredAndSortedTodos = useMemo((): Todo[] => {
@@ -95,6 +116,7 @@ const MainScreen: React.FC<Props> = ({navigation}) => {
     () => ({
       total: items.length,
       completed: items.filter(todo => todo.completed).length,
+      active: items.filter(todo => !todo.completed).length,
     }),
     [items],
   );
@@ -107,21 +129,10 @@ const MainScreen: React.FC<Props> = ({navigation}) => {
     [dispatch],
   );
 
-  // Handle todo deletion with confirmation
+  // Handle todo deletion - now just dispatches delete action
   const handleDeleteTodo = useCallback(
-    (id: number, title: string) => {
-      Alert.alert(
-        'Delete Todo',
-        `Are you sure you want to delete "${title}"?`,
-        [
-          {text: 'Cancel', style: 'cancel'},
-          {
-            text: 'Delete',
-            style: 'destructive',
-            onPress: () => dispatch(deleteTodo(id)),
-          },
-        ],
-      );
+    (id: number) => {
+      dispatch(deleteTodo(id));
     },
     [dispatch],
   );
@@ -144,7 +155,7 @@ const MainScreen: React.FC<Props> = ({navigation}) => {
 
   // Render todo item with memoization
   const renderTodoItem: ListRenderItem<Todo> = useCallback(
-    ({item}) => (
+    ({ item }) => (
       <TodoItem
         todo={item}
         onToggle={handleToggleTodo}
@@ -164,28 +175,53 @@ const MainScreen: React.FC<Props> = ({navigation}) => {
     navigation.navigate('AddTodoScreen');
   }, [navigation]);
 
+  // Handle error display
+  const handleShowError = useCallback(() => {
+    if (error) {
+      showModal('Error', error);
+    }
+  }, [error, showModal]);
+
+  // Show error modal when error occurs
+  useEffect(() => {
+    if (error) {
+      handleShowError();
+    }
+  }, [error, handleShowError]);
+
+  // Get modal buttons for error display
+  const getModalButtons = () => {
+    return [
+      {
+        text: 'OK',
+        onPress: hideModal,
+        style: 'default' as const,
+      },
+    ];
+  };
+
+  // Get item layout for FlatList optimization
+  const getItemLayout = useCallback(
+    (data: Todo[] | null | undefined, index: number) => ({
+      length: 120, // Estimated item height
+      offset: 120 * index,
+      index,
+    }),
+    [],
+  );
+
+  // Key extractor for FlatList
+  const keyExtractor = useCallback((item: Todo) => item.id.toString(), []);
+
   // Loading state
   if (loading) {
     return (
-      <SafeAreaView style={styles.centerContainer} edges={['left', 'right', 'bottom']}>
+      <SafeAreaView
+        style={styles.centerContainer}
+        edges={['left', 'right', 'bottom']}
+      >
         <ActivityIndicator size="large" color="#000" />
         <Text style={styles.loadingText}>Loading todos...</Text>
-      </SafeAreaView>
-    );
-  }
-
-  // Error state
-  if (error) {
-    return (
-      <SafeAreaView style={styles.centerContainer} edges={['left', 'right', 'bottom']}>
-        <Text style={styles.errorText}>Error: {error}</Text>
-        <TouchableOpacity
-          style={styles.retryButton}
-          onPress={handleRetry}
-          activeOpacity={0.8}>
-          <Text style={styles.retryButtonText}>Retry</Text>
-        
-        </TouchableOpacity>
       </SafeAreaView>
     );
   }
@@ -193,9 +229,10 @@ const MainScreen: React.FC<Props> = ({navigation}) => {
   return (
     <SafeAreaView style={styles.container} edges={['left', 'right', 'bottom']}>
       {/* Header with counts */}
-     <View style={styles.header}>
+      <View style={styles.header}>
         <Text style={styles.headerText}>
-          Total: {counts.total} | Completed: {counts.completed}
+          Total: {counts.total} | Active: {counts.active} | Completed:{' '}
+          {counts.completed}
         </Text>
       </View>
 
@@ -211,7 +248,7 @@ const MainScreen: React.FC<Props> = ({navigation}) => {
       {/* Todo List */}
       <FlatList
         data={filteredAndSortedTodos}
-        keyExtractor={(item: Todo) => item.id.toString()}
+        keyExtractor={keyExtractor}
         renderItem={renderTodoItem}
         style={styles.list}
         showsVerticalScrollIndicator={false}
@@ -219,7 +256,7 @@ const MainScreen: React.FC<Props> = ({navigation}) => {
           <View style={styles.emptyContainer}>
             <Text style={styles.emptyText}>
               {filter === 'All'
-                ? 'No todos yet'
+                ? 'No todos yet. Tap + to add your first todo!'
                 : `No ${filter.toLowerCase()} todos`}
             </Text>
           </View>
@@ -228,21 +265,36 @@ const MainScreen: React.FC<Props> = ({navigation}) => {
         removeClippedSubviews={true}
         maxToRenderPerBatch={10}
         windowSize={10}
-        initialNumToRender={20}
-        getItemLayout={(data, index) => ({
-          length: 80,
-          offset: 80 * index,
-          index,
-        })}
+        initialNumToRender={15}
+        updateCellsBatchingPeriod={50}
+        getItemLayout={getItemLayout}
+        // Add content container style for better spacing
+        contentContainerStyle={
+          filteredAndSortedTodos.length === 0
+            ? styles.emptyListContainer
+            : undefined
+        }
       />
 
       {/* Add Todo Button */}
       <TouchableOpacity
         style={styles.addButton}
         onPress={navigateToAddTodo}
-        activeOpacity={0.8}>
-        <Text style={styles.addButtonText}>+</Text>     
+        activeOpacity={0.8}
+        accessibilityLabel="Add new todo"
+        accessibilityRole="button"
+      >
+        <Text style={styles.addButtonText}>+</Text>
       </TouchableOpacity>
+
+      {/* Error Modal - Only for errors, not for delete confirmation */}
+      <CustomModal
+        visible={modal.visible}
+        title={modal.title}
+        message={modal.message}
+        buttons={getModalButtons()}
+        onClose={hideModal}
+      />
     </SafeAreaView>
   );
 };
@@ -282,34 +334,22 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    paddingHorizontal: 20,
     paddingTop: 100,
+  },
+  emptyListContainer: {
+    flexGrow: 1,
   },
   emptyText: {
     fontSize: 18,
     color: '#666',
     textAlign: 'center',
+    lineHeight: 24,
   },
   loadingText: {
     marginTop: 16,
     fontSize: 16,
     color: '#666',
-  },
-  errorText: {
-    fontSize: 16,
-    color: '#e74c3c',
-    textAlign: 'center',
-    marginBottom: 20,
-  },
-  retryButton: {
-    backgroundColor: '#000',
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 5,
-  },
-  retryButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
   },
   addButton: {
     position: 'absolute',
@@ -323,7 +363,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     elevation: 8,
     shadowColor: '#000',
-    shadowOffset: {width: 0, height: 4},
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 4,
   },

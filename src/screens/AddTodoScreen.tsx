@@ -1,19 +1,19 @@
-import React, {useState, useCallback} from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
   TextInput,
   TouchableOpacity,
   StyleSheet,
-  Alert,
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
-import {useDispatch} from 'react-redux';
-import {StackNavigationProp} from '@react-navigation/stack';
-import {addTodo} from '../store/todoSlice';
-import { RootStackParamList} from '../types';
+import { useDispatch } from 'react-redux';
+import { StackNavigationProp } from '@react-navigation/stack';
+import { addTodo } from '../store/todoSlice';
+import { RootStackParamList } from '../types';
 import { AppDispatch } from '../store/store';
+import CustomModal from '../components/CustomModal';
 
 type AddTodoScreenNavigationProp = StackNavigationProp<
   RootStackParamList,
@@ -24,35 +24,69 @@ interface Props {
   navigation: AddTodoScreenNavigationProp;
 }
 
-const AddTodoScreen: React.FC<Props> = ({navigation}) => {
+interface ModalState {
+  visible: boolean;
+  type: 'error' | 'success';
+  title: string;
+  message: string;
+}
+
+const AddTodoScreen: React.FC<Props> = ({ navigation }) => {
   const [title, setTitle] = useState<string>('');
+  const [modal, setModal] = useState<ModalState>({
+    visible: false,
+    type: 'error',
+    title: '',
+    message: '',
+  });
+
   const dispatch = useDispatch<AppDispatch>();
+
+  // Show modal helper
+  const showModal = useCallback(
+    (type: 'error' | 'success', title: string, message: string) => {
+      setModal({
+        visible: true,
+        type,
+        title,
+        message,
+      });
+    },
+    [],
+  );
+
+  // Hide modal helper
+  const hideModal = useCallback(() => {
+    setModal(prev => ({ ...prev, visible: false }));
+  }, []);
 
   // Handle adding new todo with validation
   const handleAddTodo = useCallback(() => {
     const trimmedTitle = title.trim();
 
     if (!trimmedTitle) {
-      Alert.alert('Error', 'Please enter a todo title');
+      showModal('error', 'Error', 'Please enter a todo title');
       return;
     }
 
     if (trimmedTitle.length > 100) {
-      Alert.alert('Error', 'Todo title must be less than 100 characters');
+      showModal(
+        'error',
+        'Error',
+        'Todo title must be less than 100 characters',
+      );
       return;
     }
 
     // Dispatch add todo action
-    dispatch(addTodo({title: trimmedTitle}));
+    dispatch(addTodo({ title: trimmedTitle }));
 
     // Show success feedback
-    Alert.alert('Success', 'Todo added successfully!', [
-      {text: 'OK', onPress: () => navigation.goBack()},
-    ]);
+    showModal('success', 'Success', 'Todo added successfully!');
 
     // Clear input
     setTitle('');
-  }, [title, dispatch, navigation]);
+  }, [title, dispatch, showModal]);
 
   const handleGoBack = useCallback(() => {
     navigation.goBack();
@@ -62,12 +96,39 @@ const AddTodoScreen: React.FC<Props> = ({navigation}) => {
     setTitle(text);
   }, []);
 
+  const handleSuccessModalClose = useCallback(() => {
+    hideModal();
+    navigation.goBack();
+  }, [hideModal, navigation]);
+
   const isAddDisabled = !title.trim();
+
+  // Get modal buttons based on type
+  const getModalButtons = () => {
+    if (modal.type === 'success') {
+      return [
+        {
+          text: 'OK',
+          onPress: handleSuccessModalClose,
+          style: 'default' as const,
+        },
+      ];
+    } else {
+      return [
+        {
+          text: 'OK',
+          onPress: hideModal,
+          style: 'default' as const,
+        },
+      ];
+    }
+  };
 
   return (
     <KeyboardAvoidingView
       style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    >
       <View style={styles.content}>
         <Text style={styles.label}>Todo Title</Text>
         <TextInput
@@ -85,20 +146,30 @@ const AddTodoScreen: React.FC<Props> = ({navigation}) => {
         <Text style={styles.charCount}>{title.length}/100 characters</Text>
 
         <TouchableOpacity
-          style={[styles.addButton, {opacity: isAddDisabled ? 0.5 : 1}]}
+          style={[styles.addButton, { opacity: isAddDisabled ? 0.5 : 1 }]}
           onPress={handleAddTodo}
           disabled={isAddDisabled}
-          activeOpacity={0.8}>
+          activeOpacity={0.8}
+        >
           <Text style={styles.addButtonText}>Add Todo</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
           style={styles.cancelButton}
           onPress={handleGoBack}
-          activeOpacity={0.8}>
+          activeOpacity={0.8}
+        >
           <Text style={styles.cancelButtonText}>Cancel</Text>
         </TouchableOpacity>
       </View>
+
+      <CustomModal
+        visible={modal.visible}
+        title={modal.title}
+        message={modal.message}
+        buttons={getModalButtons()}
+        onClose={hideModal}
+      />
     </KeyboardAvoidingView>
   );
 };

@@ -1,15 +1,12 @@
 // ===== src/components/SortButtons.tsx =====
 import React from 'react';
-import {View, Text, TouchableOpacity, StyleSheet} from 'react-native';
-import {SortButtonsProps, SortType} from '../types';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { SortButtonsProps, SortType } from '../types';
 
-const SortButtons: React.FC<SortButtonsProps> = ({
-  currentSort,
-  onSortChange,
-}) => {
-  const sortOptions: {key: SortType; label: string}[] = [
-    {key: 'mostRecent', label: 'Most Recent'},
-    {key: 'id', label: 'By ID'},
+const SortButtons = ({ currentSort, onSortChange }: SortButtonsProps) => {
+  const sortOptions: { key: SortType; label: string }[] = [
+    { key: 'mostRecent', label: 'Most Recent' },
+    { key: 'id', label: 'By ID' },
   ];
 
   return (
@@ -27,12 +24,14 @@ const SortButtons: React.FC<SortButtonsProps> = ({
               },
             ]}
             onPress={() => onSortChange(option.key)}
-            activeOpacity={0.7}>
+            activeOpacity={0.7}
+          >
             <Text
               style={[
                 styles.sortButtonText,
-                {color: currentSort === option.key ? '#fff' : '#000'},
-              ]}>
+                { color: currentSort === option.key ? '#fff' : '#000' },
+              ]}
+            >
               {option.label}
             </Text>
           </TouchableOpacity>

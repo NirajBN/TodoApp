@@ -2,10 +2,10 @@ import React from 'react';
 import {View, Text, TouchableOpacity, StyleSheet} from 'react-native';
 import {FilterButtonsProps, FilterType} from '../types';
 
-const FilterButtons: React.FC<FilterButtonsProps> = ({
+const FilterButtons = ({
   currentFilter,
   onFilterChange,
-}) => {
+}:FilterButtonsProps) => {
   const filters: FilterType[] = ['All', 'Active', 'Done'];
 
   return (

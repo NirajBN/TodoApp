@@ -5,7 +5,6 @@ import {
   TouchableOpacity,
   StyleSheet,
   TextInput,
-  Alert,
 } from 'react-native';
 import { useDispatch } from 'react-redux';
 import Animated, {
@@ -21,170 +20,243 @@ import Animated, {
 import { editTodo } from '../store/todoSlice';
 import { TodoItemProps } from '../types';
 import { AppDispatch } from '../store/store';
+import CustomModal from '../components/CustomModal';
 
-const TodoItem: React.FC<TodoItemProps> = React.memo(
-  ({ todo, onToggle, onDelete }) => {
-    const [isEditing, setIsEditing] = useState<boolean>(false);
-    const [editText, setEditText] = useState<string>(todo.title);
-    const dispatch = useDispatch<AppDispatch>();
+interface ModalState {
+  visible: boolean;
+  type: 'error' | 'confirm';
+  title: string;
+  message: string;
+}
 
-    // Animated values
-    const slideX = useSharedValue(0);
-    const opacity = useSharedValue(1);
-    const scale = useSharedValue(1);
-    const checkboxScale = useSharedValue(todo.completed ? 1 : 0.8);
-    const strikethroughProgress = useSharedValue(todo.completed ? 1 : 0);
+const TodoItem = React.memo(({ todo, onToggle, onDelete }: TodoItemProps) => {
+  const [isEditing, setIsEditing] = useState<boolean>(false);
+  const [editText, setEditText] = useState<string>(todo.title);
+  const [modal, setModal] = useState<ModalState>({
+    visible: false,
+    type: 'error',
+    title: '',
+    message: '',
+  });
 
-    // Initialize animations on mount
-    useEffect(() => {
-      slideX.value = withSpring(0, { damping: 15, stiffness: 100 });
-      opacity.value = withTiming(1, { duration: 300 });
-      scale.value = withSpring(1, { damping: 15, stiffness: 100 });
-    }, [slideX, opacity, scale]);
+  const dispatch = useDispatch<AppDispatch>();
 
-    // Update animations when todo completion status changes
-    useEffect(() => {
-      checkboxScale.value = withSpring(todo.completed ? 1.1 : 0.8, {
-        damping: 12,
-        stiffness: 150,
+  // Animated values
+  const slideX = useSharedValue(0);
+  const opacity = useSharedValue(1);
+  const scale = useSharedValue(1);
+  const checkboxScale = useSharedValue(todo.completed ? 1 : 0.8);
+  const strikethroughProgress = useSharedValue(todo.completed ? 1 : 0);
+
+  // Initialize animations on mount
+  useEffect(() => {
+    slideX.value = withSpring(0, { damping: 15, stiffness: 100 });
+    opacity.value = withTiming(1, { duration: 300 });
+    scale.value = withSpring(1, { damping: 15, stiffness: 100 });
+  }, [slideX, opacity, scale]);
+
+  // Update animations when todo completion status changes
+  useEffect(() => {
+    checkboxScale.value = withSpring(todo.completed ? 1.1 : 0.8, {
+      damping: 12,
+      stiffness: 150,
+    });
+    strikethroughProgress.value = withTiming(todo.completed ? 1 : 0, {
+      duration: 300,
+    });
+  }, [todo.completed, checkboxScale, strikethroughProgress]);
+
+  // Show modal helper
+  const showModal = useCallback(
+    (type: 'error' | 'confirm', title: string, message: string) => {
+      setModal({
+        visible: true,
+        type,
+        title,
+        message,
       });
-      strikethroughProgress.value = withTiming(todo.completed ? 1 : 0, {
-        duration: 300,
-      });
-    }, [todo.completed, checkboxScale, strikethroughProgress]);
+    },
+    [],
+  );
 
-    // Handle edit save
-    const handleSave = useCallback(() => {
-      const trimmedText = editText.trim();
+  // Hide modal helper
+  const hideModal = useCallback(() => {
+    setModal(prev => ({ ...prev, visible: false }));
+  }, []);
 
-      if (!trimmedText) {
-        Alert.alert('Error', 'Todo title cannot be empty');
-        return;
-      }
+  // Handle edit save
+  const handleSave = useCallback(() => {
+    const trimmedText = editText.trim();
 
-      if (trimmedText !== todo.title) {
-        dispatch(editTodo({ id: todo.id, title: trimmedText }));
-      }
+    if (!trimmedText) {
+      showModal('error', 'Error', 'Todo title cannot be empty');
+      return;
+    }
 
-      setIsEditing(false);
-    }, [editText, todo.id, todo.title, dispatch]);
+    if (trimmedText !== todo.title) {
+      dispatch(editTodo({ id: todo.id, title: trimmedText }));
+    }
 
-    // Handle edit cancel
-    const handleCancel = useCallback(() => {
-      setEditText(todo.title);
-      setIsEditing(false);
-    }, [todo.title]);
+    setIsEditing(false);
+  }, [editText, todo.id, todo.title, dispatch, showModal]);
 
-    // Format date for display
-    const formatDate = useCallback((dateString: string): string => {
-      const date = new Date(dateString);
-      return (
-        date.toLocaleDateString() +
-        ' ' +
-        date.toLocaleTimeString([], {
-          hour: '2-digit',
-          minute: '2-digit',
-        })
-      );
-    }, []);
+  // Handle edit cancel
+  const handleCancel = useCallback(() => {
+    setEditText(todo.title);
+    setIsEditing(false);
+  }, [todo.title]);
 
-    const handleToggle = useCallback(() => {
-      // Animate checkbox with bounce effect
-      checkboxScale.value = withSequence(
-        withSpring(1.3, { damping: 8, stiffness: 200 }),
-        withSpring(todo.completed ? 0.8 : 1.1, { damping: 12, stiffness: 150 }),
-      );
-
-      // Animate text strikethrough
-      strikethroughProgress.value = withTiming(!todo.completed ? 1 : 0, {
-        duration: 300,
-      });
-
-      // Add a subtle scale animation to the entire item
-      scale.value = withSequence(
-        withSpring(0.98, { damping: 15, stiffness: 200 }),
-        withSpring(1, { damping: 15, stiffness: 200 }),
-      );
-
-      onToggle(todo.id);
-    }, [
-      onToggle,
-      todo.id,
-      todo.completed,
-      checkboxScale,
-      strikethroughProgress,
-      scale,
-    ]);
-
-    const handleDelete = useCallback(() => {
-      // Animate deletion: slide out and fade
-      slideX.value = withTiming(-300, { duration: 300 });
-      opacity.value = withTiming(0, { duration: 300 });
-      scale.value = withTiming(0.8, { duration: 300 }, finished => {
-        if (finished) {
-          runOnJS(onDelete)(todo.id, todo.title);
-        }
-      });
-    }, [onDelete, todo.id, todo.title, slideX, opacity, scale]);
-
-    const handleEditPress = useCallback(() => {
-      setIsEditing(true);
-    }, []);
-
-    const handleLongPress = useCallback(() => {
-      // Add haptic feedback animation
-      scale.value = withSequence(
-        withSpring(0.95, { damping: 15, stiffness: 200 }),
-        withSpring(1, { damping: 15, stiffness: 200 }),
-      );
-      setIsEditing(true);
-    }, [scale]);
-
-    const handleEditTextChange = useCallback((text: string) => {
-      setEditText(text);
-    }, []);
-
-    // Animated styles
-    const animatedContainerStyle = useAnimatedStyle(() => {
-      return {
-        transform: [{ translateX: slideX.value }, { scale: scale.value }],
-        opacity: opacity.value,
-      };
-    }, [slideX, scale, opacity]);
-
-    const animatedCheckboxStyle = useAnimatedStyle(() => {
-      return {
-        transform: [{ scale: checkboxScale.value }],
-      };
-    }, [checkboxScale]);
-
-    const animatedTextStyle = useAnimatedStyle(() => {
-      const textOpacity = interpolate(
-        strikethroughProgress.value,
-        [0, 1],
-        [1, 0.6],
-        Extrapolation.CLAMP,
-      );
-
-      return {
-        opacity: textOpacity,
-      };
-    }, [strikethroughProgress]);
-
-    const animatedStrikethroughStyle = useAnimatedStyle(() => {
-      const width = interpolate(
-        strikethroughProgress.value,
-        [0, 1],
-        [0, 100],
-        Extrapolation.CLAMP,
-      );
-
-      return {
-        width: `${width}%`,
-      };
-    }, [strikethroughProgress]);
-
+  // Format date for display
+  const formatDate = useCallback((dateString: string): string => {
+    const date = new Date(dateString);
     return (
+      date.toLocaleDateString() +
+      ' ' +
+      date.toLocaleTimeString([], {
+        hour: '2-digit',
+        minute: '2-digit',
+      })
+    );
+  }, []);
+
+  const handleToggle = useCallback(() => {
+    // Animate checkbox with bounce effect
+    checkboxScale.value = withSequence(
+      withSpring(1.3, { damping: 8, stiffness: 200 }),
+      withSpring(todo.completed ? 0.8 : 1.1, { damping: 12, stiffness: 150 }),
+    );
+
+    // Animate text strikethrough
+    strikethroughProgress.value = withTiming(!todo.completed ? 1 : 0, {
+      duration: 300,
+    });
+
+    // Add a subtle scale animation to the entire item
+    scale.value = withSequence(
+      withSpring(0.98, { damping: 15, stiffness: 200 }),
+      withSpring(1, { damping: 15, stiffness: 200 }),
+    );
+
+    onToggle(todo.id);
+  }, [
+    onToggle,
+    todo.id,
+    todo.completed,
+    checkboxScale,
+    strikethroughProgress,
+    scale,
+  ]);
+
+  // Confirm delete action
+  const confirmDelete = useCallback(() => {
+    hideModal();
+    // Animate deletion: slide out and fade
+    slideX.value = withTiming(-300, { duration: 300 });
+    opacity.value = withTiming(0, { duration: 300 });
+    scale.value = withTiming(0.8, { duration: 300 }, finished => {
+      if (finished) {
+        runOnJS(onDelete)(todo.id, todo.title);
+      }
+    });
+  }, [onDelete, todo.id, todo.title, slideX, opacity, scale, hideModal]);
+
+  const handleDelete = useCallback(() => {
+    showModal(
+      'confirm',
+      'Confirm Delete',
+      `Are you sure you want to delete "${
+        todo.title.length > 30
+          ? todo.title.substring(0, 30) + '...'
+          : todo.title
+      }"?`,
+    );
+  }, [showModal, todo.title]);
+
+  const handleEditPress = useCallback(() => {
+    setIsEditing(true);
+  }, []);
+
+  const handleLongPress = useCallback(() => {
+    // Add haptic feedback animation
+    scale.value = withSequence(
+      withSpring(0.95, { damping: 15, stiffness: 200 }),
+      withSpring(1, { damping: 15, stiffness: 200 }),
+    );
+    setIsEditing(true);
+  }, [scale]);
+
+  const handleEditTextChange = useCallback((text: string) => {
+    setEditText(text);
+  }, []);
+
+  // Get modal buttons based on type
+  const getModalButtons = () => {
+    if (modal.type === 'confirm') {
+      return [
+        {
+          text: 'Delete',
+          onPress: confirmDelete,
+          style: 'destructive' as const,
+        },
+        {
+          text: 'Cancel',
+          onPress: hideModal,
+          style: 'cancel' as const,
+        },
+      ];
+    } else {
+      return [
+        {
+          text: 'OK',
+          onPress: hideModal,
+          style: 'default' as const,
+        },
+      ];
+    }
+  };
+
+  // Animated styles
+  const animatedContainerStyle = useAnimatedStyle(() => {
+    return {
+      transform: [{ translateX: slideX.value }, { scale: scale.value }],
+      opacity: opacity.value,
+    };
+  }, [slideX, scale, opacity]);
+
+  const animatedCheckboxStyle = useAnimatedStyle(() => {
+    return {
+      transform: [{ scale: checkboxScale.value }],
+    };
+  }, [checkboxScale]);
+
+  const animatedTextStyle = useAnimatedStyle(() => {
+    const textOpacity = interpolate(
+      strikethroughProgress.value,
+      [0, 1],
+      [1, 0.6],
+      Extrapolation.CLAMP,
+    );
+
+    return {
+      opacity: textOpacity,
+    };
+  }, [strikethroughProgress]);
+
+  const animatedStrikethroughStyle = useAnimatedStyle(() => {
+    const width = interpolate(
+      strikethroughProgress.value,
+      [0, 1],
+      [0, 100],
+      Extrapolation.CLAMP,
+    );
+
+    return {
+      width: `${width}%`,
+    };
+  }, [strikethroughProgress]);
+
+  return (
+    <>
       <Animated.View style={[styles.container, animatedContainerStyle]}>
         <View style={styles.content}>
           {/* Checkbox */}
@@ -289,9 +361,17 @@ const TodoItem: React.FC<TodoItemProps> = React.memo(
           </View>
         </View>
       </Animated.View>
-    );
-  },
-);
+
+      <CustomModal
+        visible={modal.visible}
+        title={modal.title}
+        message={modal.message}
+        buttons={getModalButtons()}
+        onClose={hideModal}
+      />
+    </>
+  );
+});
 
 const styles = StyleSheet.create({
   container: {
