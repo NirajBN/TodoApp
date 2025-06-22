@@ -1,4 +1,4 @@
-import React, {useState, useCallback} from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,16 +7,52 @@ import {
   TextInput,
   Alert,
 } from 'react-native';
-import {useDispatch} from 'react-redux';
-import {editTodo} from '../store/todoSlice';
-import {TodoItemProps} from '../types';
-import {AppDispatch} from '../store/store';
+import { useDispatch } from 'react-redux';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+  withSpring,
+  withSequence,
+  runOnJS,
+  interpolate,
+  Extrapolation,
+} from 'react-native-reanimated';
+import { editTodo } from '../store/todoSlice';
+import { TodoItemProps } from '../types';
+import { AppDispatch } from '../store/store';
 
 const TodoItem: React.FC<TodoItemProps> = React.memo(
-  ({todo, onToggle, onDelete}) => {
+  ({ todo, onToggle, onDelete }) => {
     const [isEditing, setIsEditing] = useState<boolean>(false);
     const [editText, setEditText] = useState<string>(todo.title);
     const dispatch = useDispatch<AppDispatch>();
+
+    // Animated values
+    const slideX = useSharedValue(0);
+    const opacity = useSharedValue(1);
+    const scale = useSharedValue(1);
+    const checkboxScale = useSharedValue(todo.completed ? 1 : 0.8);
+    const strikethroughProgress = useSharedValue(todo.completed ? 1 : 0);
+
+    // Initialize animations on mount
+    useEffect(() => {
+      slideX.value = withSpring(0, { damping: 15, stiffness: 100 });
+      opacity.value = withTiming(1, { duration: 300 });
+      scale.value = withSpring(1, { damping: 15, stiffness: 100 });
+    }, [slideX, opacity, scale]);
+
+    // Update animations when todo completion status changes
+    useEffect(() => {
+      checkboxScale.value = withSpring(todo.completed ? 1.1 : 0.8, {
+        damping: 12,
+        stiffness: 150,
+      });
+      strikethroughProgress.value = withTiming(todo.completed ? 1 : 0, {
+        duration: 300,
+      });
+    }, [todo.completed, checkboxScale, strikethroughProgress]);
+
     // Handle edit save
     const handleSave = useCallback(() => {
       const trimmedText = editText.trim();
@@ -27,7 +63,7 @@ const TodoItem: React.FC<TodoItemProps> = React.memo(
       }
 
       if (trimmedText !== todo.title) {
-        dispatch(editTodo({id: todo.id, title: trimmedText}));
+        dispatch(editTodo({ id: todo.id, title: trimmedText }));
       }
 
       setIsEditing(false);
@@ -53,37 +89,115 @@ const TodoItem: React.FC<TodoItemProps> = React.memo(
     }, []);
 
     const handleToggle = useCallback(() => {
+      // Animate checkbox with bounce effect
+      checkboxScale.value = withSequence(
+        withSpring(1.3, { damping: 8, stiffness: 200 }),
+        withSpring(todo.completed ? 0.8 : 1.1, { damping: 12, stiffness: 150 }),
+      );
+
+      // Animate text strikethrough
+      strikethroughProgress.value = withTiming(!todo.completed ? 1 : 0, {
+        duration: 300,
+      });
+
+      // Add a subtle scale animation to the entire item
+      scale.value = withSequence(
+        withSpring(0.98, { damping: 15, stiffness: 200 }),
+        withSpring(1, { damping: 15, stiffness: 200 }),
+      );
+
       onToggle(todo.id);
-    }, [onToggle, todo.id]);
+    }, [
+      onToggle,
+      todo.id,
+      todo.completed,
+      checkboxScale,
+      strikethroughProgress,
+      scale,
+    ]);
 
     const handleDelete = useCallback(() => {
-      onDelete(todo.id, todo.title);
-    }, [onDelete, todo.id, todo.title]);
+      // Animate deletion: slide out and fade
+      slideX.value = withTiming(-300, { duration: 300 });
+      opacity.value = withTiming(0, { duration: 300 });
+      scale.value = withTiming(0.8, { duration: 300 }, finished => {
+        if (finished) {
+          runOnJS(onDelete)(todo.id, todo.title);
+        }
+      });
+    }, [onDelete, todo.id, todo.title, slideX, opacity, scale]);
 
     const handleEditPress = useCallback(() => {
       setIsEditing(true);
     }, []);
 
     const handleLongPress = useCallback(() => {
+      // Add haptic feedback animation
+      scale.value = withSequence(
+        withSpring(0.95, { damping: 15, stiffness: 200 }),
+        withSpring(1, { damping: 15, stiffness: 200 }),
+      );
       setIsEditing(true);
-    }, []);
+    }, [scale]);
 
     const handleEditTextChange = useCallback((text: string) => {
       setEditText(text);
     }, []);
 
+    // Animated styles
+    const animatedContainerStyle = useAnimatedStyle(() => {
+      return {
+        transform: [{ translateX: slideX.value }, { scale: scale.value }],
+        opacity: opacity.value,
+      };
+    }, [slideX, scale, opacity]);
+
+    const animatedCheckboxStyle = useAnimatedStyle(() => {
+      return {
+        transform: [{ scale: checkboxScale.value }],
+      };
+    }, [checkboxScale]);
+
+    const animatedTextStyle = useAnimatedStyle(() => {
+      const textOpacity = interpolate(
+        strikethroughProgress.value,
+        [0, 1],
+        [1, 0.6],
+        Extrapolation.CLAMP,
+      );
+
+      return {
+        opacity: textOpacity,
+      };
+    }, [strikethroughProgress]);
+
+    const animatedStrikethroughStyle = useAnimatedStyle(() => {
+      const width = interpolate(
+        strikethroughProgress.value,
+        [0, 1],
+        [0, 100],
+        Extrapolation.CLAMP,
+      );
+
+      return {
+        width: `${width}%`,
+      };
+    }, [strikethroughProgress]);
+
     return (
-      <View style={styles.container}>
+      <Animated.View style={[styles.container, animatedContainerStyle]}>
         <View style={styles.content}>
           {/* Checkbox */}
-          <TouchableOpacity
-            style={[
-              styles.checkbox,
-              {backgroundColor: todo.completed ? '#000' : '#fff'},
-            ]}
-            onPress={handleToggle}
-            activeOpacity={0.7}>
-            {todo.completed && <Text style={styles.checkmark}>✓</Text>}
+          <TouchableOpacity onPress={handleToggle} activeOpacity={0.7}>
+            <Animated.View
+              style={[
+                styles.checkbox,
+                { backgroundColor: todo.completed ? '#000' : '#fff' },
+                animatedCheckboxStyle,
+              ]}
+            >
+              {todo.completed && <Text style={styles.checkmark}>✓</Text>}
+            </Animated.View>
           </TouchableOpacity>
 
           {/* Todo Content */}
@@ -101,19 +215,24 @@ const TodoItem: React.FC<TodoItemProps> = React.memo(
             ) : (
               <TouchableOpacity
                 onLongPress={handleLongPress}
-                activeOpacity={0.7}>
-                <Text
-                  style={[
-                    styles.todoText,
-                    {
-                      textDecorationLine: todo.completed
-                        ? 'line-through'
-                        : 'none',
-                    },
-                    {color: todo.completed ? '#999' : '#333'},
-                  ]}>
-                  {todo.title}
-                </Text>
+                activeOpacity={0.7}
+              >
+                <View style={styles.textContainer}>
+                  <Animated.Text
+                    style={[
+                      styles.todoText,
+                      { color: todo.completed ? '#999' : '#333' },
+                      animatedTextStyle,
+                    ]}
+                  >
+                    {todo.title}
+                  </Animated.Text>
+                  {todo.completed && (
+                    <Animated.View
+                      style={[styles.strikethrough, animatedStrikethroughStyle]}
+                    />
+                  )}
+                </View>
               </TouchableOpacity>
             )}
 
@@ -137,13 +256,15 @@ const TodoItem: React.FC<TodoItemProps> = React.memo(
                 <TouchableOpacity
                   style={styles.saveButton}
                   onPress={handleSave}
-                  activeOpacity={0.7}>
+                  activeOpacity={0.7}
+                >
                   <Text style={styles.saveButtonText}>Save</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={styles.cancelButton}
                   onPress={handleCancel}
-                  activeOpacity={0.7}>
+                  activeOpacity={0.7}
+                >
                   <Text style={styles.cancelButtonText}>Cancel</Text>
                 </TouchableOpacity>
               </View>
@@ -152,20 +273,22 @@ const TodoItem: React.FC<TodoItemProps> = React.memo(
                 <TouchableOpacity
                   style={styles.editButton}
                   onPress={handleEditPress}
-                  activeOpacity={0.7}>
+                  activeOpacity={0.7}
+                >
                   <Text style={styles.editButtonText}>Edit</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={styles.deleteButton}
                   onPress={handleDelete}
-                  activeOpacity={0.7}>
+                  activeOpacity={0.7}
+                >
                   <Text style={styles.deleteButtonText}>Delete</Text>
                 </TouchableOpacity>
               </View>
             )}
           </View>
         </View>
-      </View>
+      </Animated.View>
     );
   },
 );
@@ -178,7 +301,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     elevation: 2,
     shadowColor: '#000',
-    shadowOffset: {width: 0, height: 2},
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 2,
   },
@@ -207,10 +330,20 @@ const styles = StyleSheet.create({
     flex: 1,
     marginRight: 12,
   },
+  textContainer: {
+    position: 'relative',
+  },
   todoText: {
     fontSize: 16,
     lineHeight: 22,
     marginBottom: 8,
+  },
+  strikethrough: {
+    position: 'absolute',
+    top: 11,
+    left: 0,
+    height: 1,
+    backgroundColor: '#999',
   },
   editInput: {
     borderWidth: 1,
