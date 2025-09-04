@@ -3,13 +3,13 @@ import {
   View,
   Text,
   StyleSheet,
-  FlatList,
   TouchableOpacity,
   ActivityIndicator,
   ListRenderItem,
 } from 'react-native';
 import { useSelector, useDispatch } from 'react-redux';
 import { StackNavigationProp } from '@react-navigation/stack';
+import { KeyboardAwareFlatList } from 'react-native-keyboard-aware-scroll-view';
 import {
   fetchTodosAsync,
   toggleTodo,
@@ -228,7 +228,7 @@ const MainScreen = ({ navigation }: Props) => {
 
   return (
     <SafeAreaView style={styles.container} edges={['left', 'right', 'bottom']}>
-      {/* Header with counts */}
+      {/* Header with counts - Fixed at top */}
       <View style={styles.header}>
         <Text style={styles.headerText}>
           Total: {counts.total} | Active: {counts.active} | Completed:{' '}
@@ -236,7 +236,7 @@ const MainScreen = ({ navigation }: Props) => {
         </Text>
       </View>
 
-      {/* Filter and Sort Controls */}
+      {/* Filter and Sort Controls - Fixed below header */}
       <View style={styles.controlsContainer}>
         <FilterButtons
           currentFilter={filter}
@@ -245,13 +245,21 @@ const MainScreen = ({ navigation }: Props) => {
         <SortButtons currentSort={sortBy} onSortChange={handleSortChange} />
       </View>
 
-      {/* Todo List */}
-      <FlatList
+      {/* Todo List with Keyboard Awareness */}
+      <KeyboardAwareFlatList
         data={filteredAndSortedTodos}
         keyExtractor={keyExtractor}
         renderItem={renderTodoItem}
         style={styles.list}
         showsVerticalScrollIndicator={false}
+        // Keyboard aware props
+        enableOnAndroid={true}
+        enableAutomaticScroll={true}
+        extraScrollHeight={20}
+        keyboardOpeningTime={0}
+        // FlatList specific props
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <Text style={styles.emptyText}>
@@ -268,11 +276,11 @@ const MainScreen = ({ navigation }: Props) => {
         initialNumToRender={15}
         updateCellsBatchingPeriod={50}
         getItemLayout={getItemLayout}
-        // Add content container style for better spacing
+        // Content container style
         contentContainerStyle={
           filteredAndSortedTodos.length === 0
             ? styles.emptyListContainer
-            : { paddingBottom: 84,}
+            : { paddingBottom: 100 }
         }
       />
 
@@ -287,7 +295,7 @@ const MainScreen = ({ navigation }: Props) => {
         <Text style={styles.addButtonText}>+</Text>
       </TouchableOpacity>
 
-      {/* Error Modal - Only for errors, not for delete confirmation */}
+      {/* Error Modal */}
       <CustomModal
         visible={modal.visible}
         title={modal.title}
