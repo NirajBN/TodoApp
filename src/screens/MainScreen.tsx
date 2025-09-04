@@ -272,7 +272,7 @@ const MainScreen = ({ navigation }: Props) => {
         contentContainerStyle={
           filteredAndSortedTodos.length === 0
             ? styles.emptyListContainer
-            : undefined
+            : { paddingBottom: 84,}
         }
       />
 

@@ -7,6 +7,7 @@ import {
   TextInput,
 } from 'react-native';
 import { useDispatch } from 'react-redux';
+import BouncyCheckbox from "react-native-bouncy-checkbox";
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -29,6 +30,8 @@ interface ModalState {
   message: string;
 }
 
+const MAX_CHARACTERS = 100;
+
 const TodoItem = React.memo(({ todo, onToggle, onDelete }: TodoItemProps) => {
   const [isEditing, setIsEditing] = useState<boolean>(false);
   const [editText, setEditText] = useState<string>(todo.title);
@@ -38,6 +41,7 @@ const TodoItem = React.memo(({ todo, onToggle, onDelete }: TodoItemProps) => {
     title: '',
     message: '',
   });
+  const [textLayout, setTextLayout] = useState({ width: 0, height: 0, lineHeight: 22 });
 
   const dispatch = useDispatch<AppDispatch>();
 
@@ -45,7 +49,7 @@ const TodoItem = React.memo(({ todo, onToggle, onDelete }: TodoItemProps) => {
   const slideX = useSharedValue(0);
   const opacity = useSharedValue(1);
   const scale = useSharedValue(1);
-  const checkboxScale = useSharedValue(todo.completed ? 1 : 0.8);
+  const checkboxScale = useSharedValue(1);
   const strikethroughProgress = useSharedValue(todo.completed ? 1 : 0);
 
   // Initialize animations on mount
@@ -57,7 +61,7 @@ const TodoItem = React.memo(({ todo, onToggle, onDelete }: TodoItemProps) => {
 
   // Update animations when todo completion status changes
   useEffect(() => {
-    checkboxScale.value = withSpring(todo.completed ? 1.1 : 0.8, {
+    checkboxScale.value = withSpring(1, {
       damping: 12,
       stiffness: 150,
     });
@@ -65,6 +69,12 @@ const TodoItem = React.memo(({ todo, onToggle, onDelete }: TodoItemProps) => {
       duration: 300,
     });
   }, [todo.completed, checkboxScale, strikethroughProgress]);
+
+  // Calculate number of lines based on text layout
+  const getNumberOfLines = useCallback((width: number, height: number, lineHeight: number) => {
+    if (height === 0) return 1;
+    return Math.round(height / lineHeight);
+  }, []);
 
   // Show modal helper
   const showModal = useCallback(
@@ -119,15 +129,9 @@ const TodoItem = React.memo(({ todo, onToggle, onDelete }: TodoItemProps) => {
     );
   }, []);
 
-  const handleToggle = useCallback(() => {
-    // Animate checkbox with bounce effect
-    checkboxScale.value = withSequence(
-      withSpring(1.3, { damping: 8, stiffness: 200 }),
-      withSpring(todo.completed ? 0.8 : 1.1, { damping: 12, stiffness: 150 }),
-    );
-
+  const handleToggle = useCallback((isChecked: boolean) => {
     // Animate text strikethrough
-    strikethroughProgress.value = withTiming(!todo.completed ? 1 : 0, {
+    strikethroughProgress.value = withTiming(isChecked ? 1 : 0, {
       duration: 300,
     });
 
@@ -141,8 +145,6 @@ const TodoItem = React.memo(({ todo, onToggle, onDelete }: TodoItemProps) => {
   }, [
     onToggle,
     todo.id,
-    todo.completed,
-    checkboxScale,
     strikethroughProgress,
     scale,
   ]);
@@ -186,7 +188,15 @@ const TodoItem = React.memo(({ todo, onToggle, onDelete }: TodoItemProps) => {
   }, [scale]);
 
   const handleEditTextChange = useCallback((text: string) => {
-    setEditText(text);
+    if (text.length <= MAX_CHARACTERS) {
+      setEditText(text);
+    }
+  }, []);
+
+  // Handle text layout measurement
+  const handleTextLayout = useCallback((event) => {
+    const { width, height } = event.nativeEvent.layout;
+    setTextLayout({ width, height, lineHeight: 22 });
   }, []);
 
   // Get modal buttons based on type
@@ -260,34 +270,57 @@ const TodoItem = React.memo(({ todo, onToggle, onDelete }: TodoItemProps) => {
       <Animated.View style={[styles.container, animatedContainerStyle]}>
         <View style={styles.content}>
           {/* Checkbox */}
-          <TouchableOpacity onPress={handleToggle} activeOpacity={0.7}>
-            <Animated.View
-              style={[
-                styles.checkbox,
-                { backgroundColor: todo.completed ? '#000' : '#fff' },
-                animatedCheckboxStyle,
-              ]}
-            >
-              {todo.completed && <Text style={styles.checkmark}>✓</Text>}
+          {!isEditing && (
+            <Animated.View style={[styles.checkboxContainer, animatedCheckboxStyle]}>
+              <BouncyCheckbox
+                isChecked={todo.completed}
+                onPress={handleToggle}
+                size={24}
+                fillColor="#000000"
+                unfillColor="#FFFFFF"
+                text=""
+                iconStyle={{ 
+                  borderColor: "#000000", 
+                  borderRadius: 6,
+                  borderWidth: 2 
+                }}
+                innerIconStyle={{ 
+                  borderWidth: 2, 
+                  borderRadius: 4 
+                }}
+                textStyle={{ display: 'none' }}
+                bounceEffect={1.3}
+                bounceFriction={3}
+                bounceVelocityIn={0.1}
+                bounceVelocityOut={0.4}
+                useNativeDriver={true}
+                disableBuiltInState={false}
+              />
             </Animated.View>
-          </TouchableOpacity>
+          )}
 
           {/* Todo Content */}
           <View style={styles.todoContent}>
             {isEditing ? (
-              <TextInput
-                style={styles.editInput}
-                value={editText}
-                onChangeText={handleEditTextChange}
-                autoFocus
-                multiline
-                onBlur={handleSave}
-                onSubmitEditing={handleSave}
-              />
+              <View>
+                <TextInput
+                  style={styles.editInput}
+                  value={editText}
+                  onChangeText={handleEditTextChange}
+                  autoFocus
+                  multiline
+                  maxLength={MAX_CHARACTERS}
+                  onBlur={handleSave}
+                  onSubmitEditing={handleSave}
+                />
+                <Text style={styles.characterCounter}>
+                  {editText.length}/{MAX_CHARACTERS}
+                </Text>
+              </View>
             ) : (
               <TouchableOpacity
                 onLongPress={handleLongPress}
-                activeOpacity={0.7}
+                activeOpacity={1}
               >
                 <View style={styles.textContainer}>
                   <Animated.Text
@@ -296,13 +329,27 @@ const TodoItem = React.memo(({ todo, onToggle, onDelete }: TodoItemProps) => {
                       { color: todo.completed ? '#999' : '#333' },
                       animatedTextStyle,
                     ]}
+                    onLayout={handleTextLayout}
                   >
                     {todo.title}
                   </Animated.Text>
-                  {todo.completed && (
-                    <Animated.View
-                      style={[styles.strikethrough, animatedStrikethroughStyle]}
-                    />
+                  {todo.completed && textLayout.height > 0 && (
+                    <>
+                      {Array.from({ 
+                        length: getNumberOfLines(textLayout.width, textLayout.height, textLayout.lineHeight) 
+                      }, (_, index) => (
+                        <Animated.View
+                          key={index}
+                          style={[
+                            styles.strikethrough,
+                            {
+                              top: 11 + (index * textLayout.lineHeight),
+                            },
+                            animatedStrikethroughStyle,
+                          ]}
+                        />
+                      ))}
+                    </>
                   )}
                 </View>
               </TouchableOpacity>
@@ -390,21 +437,11 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     padding: 16,
   },
-  checkbox: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: '#000',
-    justifyContent: 'center',
-    alignItems: 'center',
+  checkboxContainer: {
     marginRight: 12,
-    marginTop: 2,
-  },
-  checkmark: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: 'bold',
+    marginTop: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   todoContent: {
     flex: 1,
@@ -412,6 +449,7 @@ const styles = StyleSheet.create({
   },
   textContainer: {
     position: 'relative',
+    alignSelf: 'stretch',
   },
   todoText: {
     fontSize: 16,
@@ -420,7 +458,6 @@ const styles = StyleSheet.create({
   },
   strikethrough: {
     position: 'absolute',
-    top: 11,
     left: 0,
     height: 1,
     backgroundColor: '#999',
@@ -431,8 +468,14 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     padding: 8,
     fontSize: 16,
-    marginBottom: 8,
+    marginBottom: 4,
     minHeight: 40,
+  },
+  characterCounter: {
+    fontSize: 11,
+    color: '#666',
+    textAlign: 'right',
+    marginBottom: 4,
   },
   timestampContainer: {
     marginTop: 4,
