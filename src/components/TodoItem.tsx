@@ -9,7 +9,7 @@ import {
   Keyboard,
 } from 'react-native';
 import { useDispatch } from 'react-redux';
-import BouncyCheckbox from "react-native-bouncy-checkbox";
+import BouncyCheckbox from 'react-native-bouncy-checkbox';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -43,8 +43,12 @@ const TodoItem = React.memo(({ todo, onToggle, onDelete }: TodoItemProps) => {
     title: '',
     message: '',
   });
-  const [textLayout, setTextLayout] = useState({ width: 0, height: 0, lineHeight: 22 });
-  
+  const [textLayout, setTextLayout] = useState({
+    width: 0,
+    height: 0,
+    lineHeight: 22,
+  });
+
   const textInputRef = useRef<TextInput>(null);
   const dispatch = useDispatch<AppDispatch>();
 
@@ -76,14 +80,14 @@ const TodoItem = React.memo(({ todo, onToggle, onDelete }: TodoItemProps) => {
   // Handle keyboard events for better UX
   useEffect(() => {
     let keyboardListener: any;
-    
+
     if (isEditing) {
       keyboardListener = Keyboard.addListener(
         Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
         () => {
           // Auto-save when keyboard is dismissed
           handleSave();
-        }
+        },
       );
     }
 
@@ -95,10 +99,13 @@ const TodoItem = React.memo(({ todo, onToggle, onDelete }: TodoItemProps) => {
   }, [isEditing]);
 
   // Calculate number of lines based on text layout
-  const getNumberOfLines = useCallback((width: number, height: number, lineHeight: number) => {
-    if (height === 0) return 1;
-    return Math.round(height / lineHeight);
-  }, []);
+  const getNumberOfLines = useCallback(
+    (width: number, height: number, lineHeight: number) => {
+      if (height === 0) return 1;
+      return Math.round(height / lineHeight);
+    },
+    [],
+  );
 
   // Show modal helper
   const showModal = useCallback(
@@ -157,25 +164,23 @@ const TodoItem = React.memo(({ todo, onToggle, onDelete }: TodoItemProps) => {
     );
   }, []);
 
-  const handleToggle = useCallback((isChecked: boolean) => {
-    // Animate text strikethrough
-    strikethroughProgress.value = withTiming(isChecked ? 1 : 0, {
-      duration: 300,
-    });
+  const handleToggle = useCallback(
+    (isChecked: boolean) => {
+      // Animate text strikethrough
+      strikethroughProgress.value = withTiming(isChecked ? 1 : 0, {
+        duration: 300,
+      });
 
-    // Add a subtle scale animation to the entire item
-    scale.value = withSequence(
-      withSpring(0.98, { damping: 15, stiffness: 200 }),
-      withSpring(1, { damping: 15, stiffness: 200 }),
-    );
+      // Add a subtle scale animation to the entire item
+      scale.value = withSequence(
+        withSpring(0.98, { damping: 15, stiffness: 200 }),
+        withSpring(1, { damping: 15, stiffness: 200 }),
+      );
 
-    onToggle(todo.id);
-  }, [
-    onToggle,
-    todo.id,
-    strikethroughProgress,
-    scale,
-  ]);
+      onToggle(todo.id);
+    },
+    [onToggle, todo.id, strikethroughProgress, scale],
+  );
 
   // Confirm delete action
   const confirmDelete = useCallback(() => {
@@ -227,7 +232,7 @@ const TodoItem = React.memo(({ todo, onToggle, onDelete }: TodoItemProps) => {
   }, []);
 
   // Handle text layout measurement
-  const handleTextLayout = useCallback((event) => {
+  const handleTextLayout = useCallback(event => {
     const { width, height } = event.nativeEvent.layout;
     setTextLayout({ width, height, lineHeight: 22 });
   }, []);
@@ -304,7 +309,9 @@ const TodoItem = React.memo(({ todo, onToggle, onDelete }: TodoItemProps) => {
         <View style={styles.content}>
           {/* Checkbox */}
           {!isEditing && (
-            <Animated.View style={[styles.checkboxContainer, animatedCheckboxStyle]}>
+            <Animated.View
+              style={[styles.checkboxContainer, animatedCheckboxStyle]}
+            >
               <BouncyCheckbox
                 isChecked={todo.completed}
                 onPress={handleToggle}
@@ -312,14 +319,14 @@ const TodoItem = React.memo(({ todo, onToggle, onDelete }: TodoItemProps) => {
                 fillColor="#000000"
                 unfillColor="#FFFFFF"
                 text=""
-                iconStyle={{ 
-                  borderColor: "#000000", 
+                iconStyle={{
+                  borderColor: '#000000',
                   borderRadius: 6,
-                  borderWidth: 2 
+                  borderWidth: 2,
                 }}
-                innerIconStyle={{ 
-                  borderWidth: 2, 
-                  borderRadius: 4 
+                innerIconStyle={{
+                  borderWidth: 2,
+                  borderRadius: 4,
                 }}
                 textStyle={{ display: 'none' }}
                 bounceEffect={1.3}
@@ -375,20 +382,27 @@ const TodoItem = React.memo(({ todo, onToggle, onDelete }: TodoItemProps) => {
                   </Animated.Text>
                   {todo.completed && textLayout.height > 0 && (
                     <>
-                      {Array.from({ 
-                        length: getNumberOfLines(textLayout.width, textLayout.height, textLayout.lineHeight) 
-                      }, (_, index) => (
-                        <Animated.View
-                          key={index}
-                          style={[
-                            styles.strikethrough,
-                            {
-                              top: 11 + (index * textLayout.lineHeight),
-                            },
-                            animatedStrikethroughStyle,
-                          ]}
-                        />
-                      ))}
+                      {Array.from(
+                        {
+                          length: getNumberOfLines(
+                            textLayout.width,
+                            textLayout.height,
+                            textLayout.lineHeight,
+                          ),
+                        },
+                        (_, index) => (
+                          <Animated.View
+                            key={index}
+                            style={[
+                              styles.strikethrough,
+                              {
+                                top: 11 + index * textLayout.lineHeight,
+                              },
+                              animatedStrikethroughStyle,
+                            ]}
+                          />
+                        ),
+                      )}
                     </>
                   )}
                 </View>
@@ -512,7 +526,8 @@ const styles = StyleSheet.create({
     minHeight: 50,
     maxHeight: 120,
     backgroundColor: '#fff',
-    // Better text input styling
+    color: '#333',
+
     ...Platform.select({
       ios: {
         paddingTop: 12,
