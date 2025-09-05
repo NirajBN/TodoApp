@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   ListRenderItem,
+  Platform,
 } from 'react-native';
 import { useSelector, useDispatch } from 'react-redux';
 import { StackNavigationProp } from '@react-navigation/stack';
@@ -58,7 +59,7 @@ const MainScreen = ({ navigation }: Props) => {
     dispatch(fetchTodosAsync());
   }, [dispatch]);
 
-  // Clear error when component unmounts
+
   useEffect(() => {
     return () => {
       if (error) {
@@ -182,14 +183,13 @@ const MainScreen = ({ navigation }: Props) => {
     }
   }, [error, showModal]);
 
-  // Show error modal when error occurs
+
   useEffect(() => {
     if (error) {
       handleShowError();
     }
   }, [error, handleShowError]);
 
-  // Get modal buttons for error display
   const getModalButtons = () => {
     return [
       {
@@ -199,16 +199,6 @@ const MainScreen = ({ navigation }: Props) => {
       },
     ];
   };
-
-  // Get item layout for FlatList optimization
-  const getItemLayout = useCallback(
-    (data: Todo[] | null | undefined, index: number) => ({
-      length: 120, // Estimated item height
-      offset: 120 * index,
-      index,
-    }),
-    [],
-  );
 
   // Key extractor for FlatList
   const keyExtractor = useCallback((item: Todo) => item.id.toString(), []);
@@ -228,7 +218,6 @@ const MainScreen = ({ navigation }: Props) => {
 
   return (
     <SafeAreaView style={styles.container} edges={['left', 'right', 'bottom']}>
-      {/* Header with counts - Fixed at top */}
       <View style={styles.header}>
         <Text style={styles.headerText}>
           Total: {counts.total} | Active: {counts.active} | Completed:{' '}
@@ -236,7 +225,6 @@ const MainScreen = ({ navigation }: Props) => {
         </Text>
       </View>
 
-      {/* Filter and Sort Controls - Fixed below header */}
       <View style={styles.controlsContainer}>
         <FilterButtons
           currentFilter={filter}
@@ -245,21 +233,21 @@ const MainScreen = ({ navigation }: Props) => {
         <SortButtons currentSort={sortBy} onSortChange={handleSortChange} />
       </View>
 
-      {/* Todo List with Keyboard Awareness */}
       <KeyboardAwareFlatList
         data={filteredAndSortedTodos}
         keyExtractor={keyExtractor}
         renderItem={renderTodoItem}
         style={styles.list}
         showsVerticalScrollIndicator={false}
-        // Keyboard aware props
         enableOnAndroid={true}
         enableAutomaticScroll={true}
-        extraScrollHeight={20}
-        keyboardOpeningTime={0}
-        // FlatList specific props
+        extraScrollHeight={Platform.OS === 'ios' ? 50 : 100}
+        extraHeight={Platform.OS === 'ios' ? 50 : 100}
+        keyboardOpeningTime={Platform.OS === 'ios' ? 250 : 0}
+        viewIsInsideTabBar={false}
+        enableResetScrollToCoords={false}
         keyboardShouldPersistTaps="handled"
-        keyboardDismissMode="on-drag"
+        keyboardDismissMode="interactive"
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <Text style={styles.emptyText}>
@@ -270,21 +258,20 @@ const MainScreen = ({ navigation }: Props) => {
           </View>
         }
         // Performance optimizations
-        removeClippedSubviews={true}
+        removeClippedSubviews={Platform.OS === 'android'}
         maxToRenderPerBatch={10}
         windowSize={10}
         initialNumToRender={15}
         updateCellsBatchingPeriod={50}
-        getItemLayout={getItemLayout}
-        // Content container style
+        // Content container style with proper padding for keyboard
         contentContainerStyle={
           filteredAndSortedTodos.length === 0
             ? styles.emptyListContainer
-            : { paddingBottom: 100 }
+            : styles.listContentContainer
         }
       />
 
-      {/* Add Todo Button */}
+
       <TouchableOpacity
         style={styles.addButton}
         onPress={navigateToAddTodo}
@@ -295,7 +282,7 @@ const MainScreen = ({ navigation }: Props) => {
         <Text style={styles.addButtonText}>+</Text>
       </TouchableOpacity>
 
-      {/* Error Modal */}
+
       <CustomModal
         visible={modal.visible}
         title={modal.title}
@@ -347,6 +334,9 @@ const styles = StyleSheet.create({
   },
   emptyListContainer: {
     flexGrow: 1,
+  },
+  listContentContainer: {
+    paddingBottom: 150, // Increased padding to ensure content is accessible above keyboard
   },
   emptyText: {
     fontSize: 18,

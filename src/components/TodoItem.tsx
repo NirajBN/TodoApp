@@ -1,10 +1,12 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import {
   View,
   Text,
   TouchableOpacity,
   StyleSheet,
   TextInput,
+  Platform,
+  Keyboard,
 } from 'react-native';
 import { useDispatch } from 'react-redux';
 import BouncyCheckbox from "react-native-bouncy-checkbox";
@@ -42,7 +44,8 @@ const TodoItem = React.memo(({ todo, onToggle, onDelete }: TodoItemProps) => {
     message: '',
   });
   const [textLayout, setTextLayout] = useState({ width: 0, height: 0, lineHeight: 22 });
-
+  
+  const textInputRef = useRef<TextInput>(null);
   const dispatch = useDispatch<AppDispatch>();
 
   // Animated values
@@ -69,6 +72,27 @@ const TodoItem = React.memo(({ todo, onToggle, onDelete }: TodoItemProps) => {
       duration: 300,
     });
   }, [todo.completed, checkboxScale, strikethroughProgress]);
+
+  // Handle keyboard events for better UX
+  useEffect(() => {
+    let keyboardListener: any;
+    
+    if (isEditing) {
+      keyboardListener = Keyboard.addListener(
+        Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
+        () => {
+          // Auto-save when keyboard is dismissed
+          handleSave();
+        }
+      );
+    }
+
+    return () => {
+      if (keyboardListener) {
+        keyboardListener.remove();
+      }
+    };
+  }, [isEditing]);
 
   // Calculate number of lines based on text layout
   const getNumberOfLines = useCallback((width: number, height: number, lineHeight: number) => {
@@ -108,12 +132,16 @@ const TodoItem = React.memo(({ todo, onToggle, onDelete }: TodoItemProps) => {
     }
 
     setIsEditing(false);
+    // Dismiss keyboard if it's open
+    Keyboard.dismiss();
   }, [editText, todo.id, todo.title, dispatch, showModal]);
 
   // Handle edit cancel
   const handleCancel = useCallback(() => {
     setEditText(todo.title);
     setIsEditing(false);
+    // Dismiss keyboard
+    Keyboard.dismiss();
   }, [todo.title]);
 
   // Format date for display
@@ -152,7 +180,6 @@ const TodoItem = React.memo(({ todo, onToggle, onDelete }: TodoItemProps) => {
   // Confirm delete action
   const confirmDelete = useCallback(() => {
     hideModal();
-    // Animate deletion: slide out and fade
     slideX.value = withTiming(-300, { duration: 300 });
     opacity.value = withTiming(0, { duration: 300 });
     scale.value = withTiming(0.8, { duration: 300 }, finished => {
@@ -176,6 +203,9 @@ const TodoItem = React.memo(({ todo, onToggle, onDelete }: TodoItemProps) => {
 
   const handleEditPress = useCallback(() => {
     setIsEditing(true);
+    setTimeout(() => {
+      textInputRef.current?.focus();
+    }, 100);
   }, []);
 
   const handleLongPress = useCallback(() => {
@@ -185,6 +215,9 @@ const TodoItem = React.memo(({ todo, onToggle, onDelete }: TodoItemProps) => {
       withSpring(1, { damping: 15, stiffness: 200 }),
     );
     setIsEditing(true);
+    setTimeout(() => {
+      textInputRef.current?.focus();
+    }, 100);
   }, [scale]);
 
   const handleEditTextChange = useCallback((text: string) => {
@@ -304,14 +337,20 @@ const TodoItem = React.memo(({ todo, onToggle, onDelete }: TodoItemProps) => {
             {isEditing ? (
               <View>
                 <TextInput
+                  ref={textInputRef}
                   style={styles.editInput}
                   value={editText}
                   onChangeText={handleEditTextChange}
-                  autoFocus
                   multiline
                   maxLength={MAX_CHARACTERS}
-                  onBlur={handleSave}
+                  placeholder="Enter todo text..."
+                  placeholderTextColor="#999"
+                  returnKeyType="done"
+                  blurOnSubmit={true}
                   onSubmitEditing={handleSave}
+                  // Better keyboard handling
+                  textAlignVertical="top"
+                  scrollEnabled={false}
                 />
                 <Text style={styles.characterCounter}>
                   {editText.length}/{MAX_CHARACTERS}
@@ -321,6 +360,7 @@ const TodoItem = React.memo(({ todo, onToggle, onDelete }: TodoItemProps) => {
               <TouchableOpacity
                 onLongPress={handleLongPress}
                 activeOpacity={1}
+                delayLongPress={500}
               >
                 <View style={styles.textContainer}>
                   <Animated.Text
@@ -466,10 +506,22 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#ddd',
     borderRadius: 4,
-    padding: 8,
+    padding: 12,
     fontSize: 16,
     marginBottom: 4,
-    minHeight: 40,
+    minHeight: 50,
+    maxHeight: 120,
+    backgroundColor: '#fff',
+    // Better text input styling
+    ...Platform.select({
+      ios: {
+        paddingTop: 12,
+        paddingBottom: 12,
+      },
+      android: {
+        textAlignVertical: 'top',
+      },
+    }),
   },
   characterCounter: {
     fontSize: 11,
